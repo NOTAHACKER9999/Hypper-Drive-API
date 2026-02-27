@@ -1,4 +1,8 @@
 {
+  "version": 2,
+  "builds": [
+    { "src": "api/**/*.js", "use": "@vercel/node" }
+  ],
   "routes": [
     { "src": "/games", "dest": "/api/games.js" },
     { "src": "/games/covers/(.*)", "dest": "/api/covers/$1.js" },
