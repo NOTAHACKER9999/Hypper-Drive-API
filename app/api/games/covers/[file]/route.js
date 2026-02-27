@@ -1,23 +1,21 @@
-import { getGames } from "../../../../games.js";
+const ZONES =
+  "https://raw.githubusercontent.com/NOTAHACKER9999/Hypper-Drive/refs/heads/main/Games/zones.json";
 
 export async function GET(req, { params }) {
-  const games = await getGames();
   const file = params.file;
 
-  const game = games.find(g =>
-    g._coverSrc.endsWith(file)
-  );
+  const res = await fetch(ZONES, { cache: "no-store" });
+  if (!res.ok) return new Response("Failed", { status: 500 });
 
-  if (!game) {
-    return new Response("Not found", { status: 404 });
-  }
+  const data = await res.json();
+  const game = data.find((g) => g.cover.endsWith(file));
 
-  const imageRes = await fetch(game._coverSrc);
+  if (!game) return new Response("Not found", { status: 404 });
 
-  return new Response(imageRes.body, {
-    headers: {
-      "Content-Type": imageRes.headers.get("content-type") || "image/png",
-      "Cache-Control": "public, max-age=86400"
-    }
+  const imgRes = await fetch(game.cover, { cache: "no-store" });
+  const buffer = await imgRes.arrayBuffer();
+
+  return new Response(buffer, {
+    headers: { "Content-Type": "image/png" },
   });
 }
