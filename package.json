@@ -1,5 +1,5 @@
 {
-  "name": "game-api-system",
+  "name": "game-api",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,6 +8,8 @@
     "start": "next start"
   },
   "dependencies": {
-    "next": "14.2.5"
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest"
   }
 }
