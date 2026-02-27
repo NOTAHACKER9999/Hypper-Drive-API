@@ -1,11 +1,9 @@
 {
   "version": 2,
   "builds": [
-    { "src": "api/**/*.js", "use": "@vercel/node" }
+    { "src": "api/index.js", "use": "@vercel/node" }
   ],
   "routes": [
-    { "src": "/games", "dest": "/api/games.js" },
-    { "src": "/games/covers/(.*)", "dest": "/api/covers/$1.js" },
-    { "src": "/games/html/(.*)", "dest": "/api/html/$1.js" }
+    { "src": "/(.*)", "dest": "/api/index.js" }
   ]
 }
