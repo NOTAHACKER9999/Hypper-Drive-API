@@ -1,38 +1,21 @@
-import { getGames } from "../../../../games.js";
+const ZONES =
+  "https://raw.githubusercontent.com/NOTAHACKER9999/Hypper-Drive/refs/heads/main/Games/zones.json";
 
 export async function GET(req, { params }) {
-  const games = await getGames();
   const file = params.file;
 
-  const game = games.find(g =>
-    g._htmlSrc.endsWith(file)
-  );
+  const res = await fetch(ZONES, { cache: "no-store" });
+  if (!res.ok) return new Response("Failed", { status: 500 });
 
-  if (!game) {
-    return new Response("Not found", { status: 404 });
-  }
+  const data = await res.json();
+  const game = data.find((g) => g.url.endsWith(file));
 
-  const res = await fetch(game._htmlSrc);
-  const html = await res.text();
-  const baseUrl = game._htmlSrc.replace(file, "");
+  if (!game) return new Response("Not found", { status: 404 });
 
-  const wrapped = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <base href="${baseUrl}">
-</head>
-<body>
-${html}
-</body>
-</html>
-`;
+  const htmlRes = await fetch(game.url, { cache: "no-store" });
+  const html = await htmlRes.text();
 
-  return new Response(wrapped, {
-    headers: {
-      "Content-Type": "text/html",
-      "Cache-Control": "public, max-age=300"
-    }
+  return new Response(html, {
+    headers: { "Content-Type": "text/html" },
   });
 }
