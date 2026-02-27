@@ -1,4 +1,4 @@
-import { getGames } from "@/lib/games";
+import { getGames } from "../../../lib/games.js";
 
 export async function GET() {
   try {
