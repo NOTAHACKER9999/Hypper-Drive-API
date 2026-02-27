@@ -8,7 +8,8 @@ const HTML_BASE =
   "https://raw.githubusercontent.com/NOTAHACKER9999/Hypper-Drive/refs/heads/main/Games/HTML/";
 
 module.exports = async (req, res) => {
-  const path = req.url.split("?")[0];
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const path = url.pathname;
 
   try {
 
@@ -18,12 +19,50 @@ module.exports = async (req, res) => {
       return;
     }
 
-    // ---------------- GAMES JSON ----------------
+    // ---------------- GAMES JSON WITH QUERY ----------------
     if (path === "/api/games") {
-      const response = await fetch(JSON_SOURCE);
-      const data = await response.json();
 
-      const rewritten = data.map(g => {
+      const response = await fetch(JSON_SOURCE);
+      const original = await response.json();
+
+      // Query params
+      const search = url.searchParams.get("search");
+      const limit = parseInt(url.searchParams.get("limit"));
+      const page = parseInt(url.searchParams.get("page")) || 1;
+      const sort = url.searchParams.get("sort");
+      const raw = url.searchParams.get("raw");
+
+      let games = [...original];
+
+      // Raw mode (no rewriting)
+      if (raw === "true") {
+        res.status(200).json(games);
+        return;
+      }
+
+      // Search filter
+      if (search) {
+        games = games.filter(g =>
+          g.name.toLowerCase().includes(search.toLowerCase())
+        );
+      }
+
+      // Sorting
+      if (sort === "asc") {
+        games.sort((a, b) => a.name.localeCompare(b.name));
+      }
+      if (sort === "desc") {
+        games.sort((a, b) => b.name.localeCompare(a.name));
+      }
+
+      // Pagination
+      const perPage = limit && limit > 0 ? limit : games.length;
+      const start = (page - 1) * perPage;
+      const end = start + perPage;
+      games = games.slice(start, end);
+
+      // Rewrite URLs
+      const rewritten = games.map(g => {
         const coverName = g.cover.split("/").pop();
         const htmlName = g.url.split("/").pop();
 
@@ -34,7 +73,13 @@ module.exports = async (req, res) => {
         };
       });
 
-      res.status(200).json(rewritten);
+      res.status(200).json({
+        total: original.length,
+        returned: rewritten.length,
+        page,
+        data: rewritten
+      });
+
       return;
     }
 
