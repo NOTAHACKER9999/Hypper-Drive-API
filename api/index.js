@@ -11,12 +11,15 @@ module.exports = async (req, res) => {
   const path = req.url.split("?")[0];
 
   try {
-    if (path === "/") {
+
+    // ---------------- ROOT ----------------
+    if (path === "/api" || path === "/api/") {
       res.status(200).send("Game API Running");
       return;
     }
 
-    if (path === "/games") {
+    // ---------------- GAMES JSON ----------------
+    if (path === "/api/games") {
       const response = await fetch(JSON_SOURCE);
       const data = await response.json();
 
@@ -35,6 +38,7 @@ module.exports = async (req, res) => {
       return;
     }
 
+    // ---------------- COVERS ----------------
     if (path.startsWith("/api/covers/")) {
       const file = path.replace("/api/covers/", "");
       const response = await fetch(ICON_BASE + file);
@@ -50,6 +54,7 @@ module.exports = async (req, res) => {
       return;
     }
 
+    // ---------------- HTML ----------------
     if (path.startsWith("/api/html/")) {
       const file = path.replace("/api/html/", "");
       const response = await fetch(HTML_BASE + file);
@@ -65,6 +70,7 @@ module.exports = async (req, res) => {
       return;
     }
 
+    // ---------------- FALLBACK ----------------
     res.status(404).send("Route not found");
 
   } catch (err) {
