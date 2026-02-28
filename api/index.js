@@ -17,16 +17,20 @@ const INTRO_GIF =
   "https://raw.githubusercontent.com/NOTAHACKER9999/Hypper-Drive/refs/heads/main/Intro.gif";
 
 module.exports = async (req, res) => {
-  // ---------------- CORS ----------------
+
+  // ================= CORS =================
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
   if (req.method === "OPTIONS") {
     res.status(200).end();
     return;
   }
 
-  const url = new URL(req.url, `http://${req.headers.host}`);
+  const protocol = req.headers['x-forwarded-proto'] || 'https';
+  const BASE_URL = `${protocol}://${req.headers.host}`;
+  const url = new URL(req.url, BASE_URL);
   const path = url.pathname;
 
   try {
@@ -35,13 +39,10 @@ module.exports = async (req, res) => {
     if (path === "/api" || path === "/api/") {
       res.status(200).json({
         status: "running",
+        base: BASE_URL,
         endpoints: [
-          "/api/games",
-          "/api/recommendations",
-          "/api/covers/{file}",
-          "/api/html/{file}",
-          "/api/banners/static/{file}",
-          "/api/banners/animated/{file}"
+          `${BASE_URL}/api/games`,
+          `${BASE_URL}/api/recommendations`
         ]
       });
       return;
@@ -49,25 +50,16 @@ module.exports = async (req, res) => {
 
     // ================= GAMES =================
     if (path === "/api/games") {
-      const response = await fetch(JSON_SOURCE);
-      if (!response.ok) {
-        res.status(500).json({ error: "Failed to fetch zones.json" });
-        return;
-      }
 
+      const response = await fetch(JSON_SOURCE);
       const original = await response.json();
+
       const search = url.searchParams.get("search");
       const limit = parseInt(url.searchParams.get("limit"));
       const page = parseInt(url.searchParams.get("page")) || 1;
       const sort = url.searchParams.get("sort");
-      const raw = url.searchParams.get("raw");
 
       let games = [...original];
-
-      if (raw === "true") {
-        res.status(200).json(games);
-        return;
-      }
 
       if (search) {
         games = games.filter(g =>
@@ -86,10 +78,11 @@ module.exports = async (req, res) => {
       const rewritten = games.map(g => {
         const coverName = g.cover.split("/").pop();
         const htmlName = decodeURIComponent(g.url.split("/").pop());
+
         return {
           name: g.name,
-          cover: `/api/covers/${coverName}`,
-          url: `/api/html/${htmlName}`
+          cover: `${BASE_URL}/api/covers/${coverName}`,
+          url: `${BASE_URL}/api/html/${htmlName}`
         };
       });
 
@@ -99,70 +92,37 @@ module.exports = async (req, res) => {
         page,
         data: rewritten
       });
+
       return;
     }
 
     // ================= RECOMMENDATIONS =================
     if (path === "/api/recommendations") {
+
       const response = await fetch(RECO_SOURCE);
-      if (!response.ok) {
-        res.status(500).json({ error: "Failed to fetch reco.zone.json" });
-        return;
-      }
-
       const original = await response.json();
-      const search = url.searchParams.get("search");
-      const limit = parseInt(url.searchParams.get("limit"));
-      const page = parseInt(url.searchParams.get("page")) || 1;
-      const sort = url.searchParams.get("sort");
-      const raw = url.searchParams.get("raw");
 
-      let items = [...original];
+      const rewritten = original.map(i => {
 
-      if (raw === "true") {
-        res.status(200).json(items);
-        return;
-      }
-
-      if (search) {
-        items = items.filter(i =>
-          i.name.toLowerCase().includes(search.toLowerCase())
-        );
-      }
-
-      if (sort === "asc") items.sort((a, b) => a.name.localeCompare(b.name));
-      if (sort === "desc") items.sort((a, b) => b.name.localeCompare(a.name));
-
-      const perPage = limit && limit > 0 ? limit : items.length;
-      const start = (page - 1) * perPage;
-      const end = start + perPage;
-      items = items.slice(start, end);
-
-      const rewritten = items.map(i => {
         const staticFile = i["banner-static"].split("/Recommendation/")[1];
         const animatedFile = i["banner-vid"].split("/Recommendation/")[1];
         const htmlName = decodeURIComponent(i.url.split("/").pop());
+
         return {
           name: i.name,
-          banner_static: `/api/banners/static/${staticFile}`,
-          banner_static_size: i["banner-static-size"],
-          banner_animated: `/api/banners/animated/${animatedFile}`,
-          banner_animated_size: i["banner-vid-size"],
-          url: `/api/html/${htmlName}`
+          banner_static: `${BASE_URL}/api/banners/static/${staticFile}`,
+          banner_animated: `${BASE_URL}/api/banners/animated/${animatedFile}`,
+          url: `${BASE_URL}/api/html/${htmlName}`
         };
       });
 
-      res.status(200).json({
-        total: original.length,
-        returned: rewritten.length,
-        page,
-        data: rewritten
-      });
+      res.status(200).json(rewritten);
       return;
     }
 
     // ================= COVERS =================
     if (path.startsWith("/api/covers/")) {
+
       const file = path.replace("/api/covers/", "");
       const response = await fetch(ICON_BASE + file);
 
@@ -179,6 +139,7 @@ module.exports = async (req, res) => {
 
     // ================= HTML WITH INTRO =================
     if (path.startsWith("/api/html/")) {
+
       const file = path.replace("/api/html/", "");
       const response = await fetch(HTML_BASE + file);
 
@@ -196,32 +157,10 @@ module.exports = async (req, res) => {
 <meta charset="UTF-8">
 <title>Loading...</title>
 <style>
-html, body {
-  margin:0;
-  padding:0;
-  height:100%;
-  background:black;
-  overflow:hidden;
-}
-#intro {
-  position:fixed;
-  inset:0;
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  background:black;
-  z-index:9999;
-}
-#intro img {
-  width:100%;
-  height:100%;
-  object-fit:contain;
-}
-#gameContainer {
-  display:none;
-  height:100%;
-  width:100%;
-}
+html, body { margin:0; padding:0; height:100%; background:black; overflow:hidden; }
+#intro { position:fixed; inset:0; display:flex; justify-content:center; align-items:center; background:black; z-index:9999; }
+#intro img { width:100%; height:100%; object-fit:contain; }
+#gameContainer { display:none; height:100%; width:100%; }
 </style>
 </head>
 <body>
@@ -251,25 +190,12 @@ setTimeout(() => {
       return;
     }
 
-    // ================= STATIC BANNERS =================
-    if (path.startsWith("/api/banners/static/")) {
-      const file = path.replace("/api/banners/static/", "");
-      const response = await fetch(RECO_BASE + file);
+    // ================= BANNERS =================
+    if (path.startsWith("/api/banners/")) {
 
-      if (!response.ok) {
-        res.status(404).json({ error: "Banner not found" });
-        return;
-      }
+      const file = path.replace("/api/banners/static/", "")
+                       .replace("/api/banners/animated/", "");
 
-      const buffer = Buffer.from(await response.arrayBuffer());
-      res.setHeader("Content-Type", response.headers.get("content-type"));
-      res.status(200).send(buffer);
-      return;
-    }
-
-    // ================= ANIMATED BANNERS =================
-    if (path.startsWith("/api/banners/animated/")) {
-      const file = path.replace("/api/banners/animated/", "");
       const response = await fetch(RECO_BASE + file);
 
       if (!response.ok) {
@@ -286,7 +212,7 @@ setTimeout(() => {
     // ================= FALLBACK =================
     res.status(404).json({
       error: "Route not found",
-      path: path
+      path
     });
 
   } catch (err) {
