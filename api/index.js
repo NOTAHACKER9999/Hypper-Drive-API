@@ -13,6 +13,9 @@ const RECO_SOURCE =
 const RECO_BASE =
   "https://raw.githubusercontent.com/NOTAHACKER9999/Hypper-Drive/refs/heads/main/Games/Banners/Recommendation/";
 
+const INTRO_GIF =
+  "https://raw.githubusercontent.com/NOTAHACKER9999/Hypper-Drive/refs/heads/main/Intro.gif";
+
 module.exports = async (req, res) => {
   // ---------------- CORS ----------------
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -27,17 +30,28 @@ module.exports = async (req, res) => {
   const path = url.pathname;
 
   try {
-    // ---------------- ROOT ----------------
+
+    // ================= ROOT =================
     if (path === "/api" || path === "/api/") {
-      res.status(200).send("Game API Running");
+      res.status(200).json({
+        status: "running",
+        endpoints: [
+          "/api/games",
+          "/api/recommendations",
+          "/api/covers/{file}",
+          "/api/html/{file}",
+          "/api/banners/static/{file}",
+          "/api/banners/animated/{file}"
+        ]
+      });
       return;
     }
 
-    // ---------------- GAMES ----------------
+    // ================= GAMES =================
     if (path === "/api/games") {
       const response = await fetch(JSON_SOURCE);
       if (!response.ok) {
-        res.status(500).send("Failed to fetch games JSON");
+        res.status(500).json({ error: "Failed to fetch zones.json" });
         return;
       }
 
@@ -85,15 +99,14 @@ module.exports = async (req, res) => {
         page,
         data: rewritten
       });
-
       return;
     }
 
-    // ---------------- RECOMMENDATIONS ----------------
+    // ================= RECOMMENDATIONS =================
     if (path === "/api/recommendations") {
       const response = await fetch(RECO_SOURCE);
       if (!response.ok) {
-        res.status(500).send("Failed to fetch recommendations JSON");
+        res.status(500).json({ error: "Failed to fetch reco.zone.json" });
         return;
       }
 
@@ -145,71 +158,139 @@ module.exports = async (req, res) => {
         page,
         data: rewritten
       });
-
       return;
     }
 
-    // ---------------- COVERS ----------------
+    // ================= COVERS =================
     if (path.startsWith("/api/covers/")) {
       const file = path.replace("/api/covers/", "");
       const response = await fetch(ICON_BASE + file);
+
       if (!response.ok) {
-        res.status(404).send("Cover not found");
+        res.status(404).json({ error: "Cover not found" });
         return;
       }
+
       const buffer = Buffer.from(await response.arrayBuffer());
       res.setHeader("Content-Type", response.headers.get("content-type"));
       res.status(200).send(buffer);
       return;
     }
 
-    // ---------------- HTML ----------------
+    // ================= HTML WITH INTRO =================
     if (path.startsWith("/api/html/")) {
       const file = path.replace("/api/html/", "");
       const response = await fetch(HTML_BASE + file);
+
       if (!response.ok) {
-        res.status(404).send("Game not found");
+        res.status(404).send("<h1>Game not found</h1>");
         return;
       }
-      const html = await response.text();
+
+      const gameHTML = await response.text();
+
+      const wrappedHTML = `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Loading...</title>
+<style>
+html, body {
+  margin:0;
+  padding:0;
+  height:100%;
+  background:black;
+  overflow:hidden;
+}
+#intro {
+  position:fixed;
+  inset:0;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  background:black;
+  z-index:9999;
+}
+#intro img {
+  width:100%;
+  height:100%;
+  object-fit:contain;
+}
+#gameContainer {
+  display:none;
+  height:100%;
+  width:100%;
+}
+</style>
+</head>
+<body>
+
+<div id="intro">
+  <img src="${INTRO_GIF}">
+</div>
+
+<div id="gameContainer">
+${gameHTML}
+</div>
+
+<script>
+setTimeout(() => {
+  document.getElementById("intro").remove();
+  document.getElementById("gameContainer").style.display = "block";
+  document.title = "Game";
+}, 4000);
+</script>
+
+</body>
+</html>
+`;
+
       res.setHeader("Content-Type", "text/html; charset=utf-8");
-      res.status(200).send(html);
+      res.status(200).send(wrappedHTML);
       return;
     }
 
-    // ---------------- BANNERS STATIC ----------------
+    // ================= STATIC BANNERS =================
     if (path.startsWith("/api/banners/static/")) {
       const file = path.replace("/api/banners/static/", "");
       const response = await fetch(RECO_BASE + file);
+
       if (!response.ok) {
-        res.status(404).send("Banner not found");
+        res.status(404).json({ error: "Banner not found" });
         return;
       }
+
       const buffer = Buffer.from(await response.arrayBuffer());
       res.setHeader("Content-Type", response.headers.get("content-type"));
       res.status(200).send(buffer);
       return;
     }
 
-    // ---------------- BANNERS ANIMATED ----------------
+    // ================= ANIMATED BANNERS =================
     if (path.startsWith("/api/banners/animated/")) {
       const file = path.replace("/api/banners/animated/", "");
       const response = await fetch(RECO_BASE + file);
+
       if (!response.ok) {
-        res.status(404).send("Banner not found");
+        res.status(404).json({ error: "Banner not found" });
         return;
       }
+
       const buffer = Buffer.from(await response.arrayBuffer());
       res.setHeader("Content-Type", response.headers.get("content-type"));
       res.status(200).send(buffer);
       return;
     }
 
-    // ---------------- FALLBACK ----------------
-    res.status(404).send("Route not found");
+    // ================= FALLBACK =================
+    res.status(404).json({
+      error: "Route not found",
+      path: path
+    });
 
   } catch (err) {
     console.error(err);
-    res.status(500).send("Server error");
+    res.status(500).json({ error: "Server error" });
   }
 };
