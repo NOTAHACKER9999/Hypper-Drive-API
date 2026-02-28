@@ -1,246 +1,222 @@
-export const config = {
-  runtime: "nodejs"
-};
+const JSON_SOURCE =
+  "https://raw.githubusercontent.com/NOTAHACKER9999/Hypper-Drive/refs/heads/main/Games/zones.json";
 
-/* ===============================
-   CONFIG: GitHub JSON Locations
-================================ */
-const GAMES_JSON_URL =
-  "https://raw.githubusercontent.com/NOTAHACKER9999/Hypper-Drive/main/Games/games.json";
+const ICON_BASE =
+  "https://raw.githubusercontent.com/NOTAHACKER9999/Hypper-Drive/refs/heads/main/Games/ICONS/";
 
-const RECO_JSON_URL =
-  "https://raw.githubusercontent.com/NOTAHACKER9999/Hypper-Drive/main/Games/Banners/Recommendation/reco.zone.json";
+const HTML_BASE =
+  "https://raw.githubusercontent.com/NOTAHACKER9999/Hypper-Drive/refs/heads/main/Games/HTML/";
 
-/* ===============================
-   Utility: Get Dynamic Base URL
-================================ */
-function getBaseURL(req) {
-  const protocol =
-    req.headers["x-forwarded-proto"] ||
-    (req.connection && req.connection.encrypted ? "https" : "http");
+const RECO_SOURCE =
+  "https://raw.githubusercontent.com/NOTAHACKER9999/Hypper-Drive/refs/heads/main/Games/Banners/Recommendation/reco.zone.json";
 
-  const host = req.headers.host;
-  return `${protocol}://${host}`;
-}
+const RECO_BASE =
+  "https://raw.githubusercontent.com/NOTAHACKER9999/Hypper-Drive/refs/heads/main/Games/Banners/Recommendation/";
 
-/* ===============================
-   Safe JSON Fetch
-================================ */
-async function fetchJSON(url) {
+const INTRO_GIF =
+  "https://raw.githubusercontent.com/NOTAHACKER9999/Hypper-Drive/refs/heads/main/Intro.gif";
+
+module.exports = async (req, res) => {
+
+  // ================= CORS =================
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    res.status(200).end();
+    return;
+  }
+
+  const protocol = req.headers['x-forwarded-proto'] || 'https';
+  const BASE_URL = `${protocol}://${req.headers.host}`;
+  const url = new URL(req.url, BASE_URL);
+  const path = url.pathname;
+
   try {
-    const response = await fetch(url, {
-      headers: { "User-Agent": "HypperDriveAPI" }
-    });
 
-    if (!response.ok) {
-      return {
-        error: true,
-        status: response.status,
-        statusText: response.statusText
-      };
+    // ================= ROOT =================
+    if (path === "/api" || path === "/api/") {
+      res.status(200).json({
+        status: "running",
+        base: BASE_URL,
+        endpoints: [
+          `${BASE_URL}/api/games`,
+          `${BASE_URL}/api/recommendations`
+        ]
+      });
+      return;
     }
 
-    const text = await response.text();
+    // ================= GAMES =================
+    if (path === "/api/games") {
 
-    if (!text || text.trim() === "") {
-      return { error: true, message: "Empty response body" };
-    }
+      const response = await fetch(JSON_SOURCE);
+      const original = await response.json();
 
-    try {
-      return JSON.parse(text);
-    } catch (err) {
-      return {
-        error: true,
-        message: "Invalid JSON",
-        preview: text.substring(0, 500)
-      };
-    }
-  } catch (err) {
-    return {
-      error: true,
-      message: err.message
-    };
-  }
-}
+      const search = url.searchParams.get("search");
+      const limit = parseInt(url.searchParams.get("limit"));
+      const page = parseInt(url.searchParams.get("page")) || 1;
+      const sort = url.searchParams.get("sort");
 
-/* ===============================
-   Convert Relative Paths
-================================ */
-function makeAbsolute(obj, baseURL) {
-  if (Array.isArray(obj)) {
-    return obj.map(item => makeAbsolute(item, baseURL));
-  }
+      let games = [...original];
 
-  if (obj && typeof obj === "object") {
-    const newObj = {};
-    for (const key in obj) {
-      const value = obj[key];
-
-      if (typeof value === "string" && value.startsWith("/")) {
-        newObj[key] = baseURL + value;
-      } else {
-        newObj[key] = makeAbsolute(value, baseURL);
+      if (search) {
+        games = games.filter(g =>
+          g.name.toLowerCase().includes(search.toLowerCase())
+        );
       }
+
+      if (sort === "asc") games.sort((a, b) => a.name.localeCompare(b.name));
+      if (sort === "desc") games.sort((a, b) => b.name.localeCompare(a.name));
+
+      const perPage = limit && limit > 0 ? limit : games.length;
+      const start = (page - 1) * perPage;
+      const end = start + perPage;
+      games = games.slice(start, end);
+
+      const rewritten = games.map(g => {
+        const coverName = g.cover.split("/").pop();
+        const htmlName = decodeURIComponent(g.url.split("/").pop());
+
+        return {
+          name: g.name,
+          cover: `${BASE_URL}/api/covers/${coverName}`,
+          url: `${BASE_URL}/api/html/${htmlName}`
+        };
+      });
+
+      res.status(200).json({
+        total: original.length,
+        returned: rewritten.length,
+        page,
+        data: rewritten
+      });
+
+      return;
     }
-    return newObj;
-  }
 
-  return obj;
-}
+    // ================= RECOMMENDATIONS =================
+    if (path === "/api/recommendations") {
 
-/* ===============================
-   Render Docs Page
-================================ */
-function renderDocs(baseURL) {
-  return `
+      const response = await fetch(RECO_SOURCE);
+      const original = await response.json();
+
+      const rewritten = original.map(i => {
+
+        const staticFile = i["banner-static"].split("/Recommendation/")[1];
+        const animatedFile = i["banner-vid"].split("/Recommendation/")[1];
+        const htmlName = decodeURIComponent(i.url.split("/").pop());
+
+        return {
+          name: i.name,
+          banner_static: `${BASE_URL}/api/banners/static/${staticFile}`,
+          banner_animated: `${BASE_URL}/api/banners/animated/${animatedFile}`,
+          url: `${BASE_URL}/api/html/${htmlName}`
+        };
+      });
+
+      res.status(200).json(rewritten);
+      return;
+    }
+
+    // ================= COVERS =================
+    if (path.startsWith("/api/covers/")) {
+
+      const file = path.replace("/api/covers/", "");
+      const response = await fetch(ICON_BASE + file);
+
+      if (!response.ok) {
+        res.status(404).json({ error: "Cover not found" });
+        return;
+      }
+
+      const buffer = Buffer.from(await response.arrayBuffer());
+      res.setHeader("Content-Type", response.headers.get("content-type"));
+      res.status(200).send(buffer);
+      return;
+    }
+
+    // ================= HTML WITH INTRO =================
+    if (path.startsWith("/api/html/")) {
+
+      const file = path.replace("/api/html/", "");
+      const response = await fetch(HTML_BASE + file);
+
+      if (!response.ok) {
+        res.status(404).send("<h1>Game not found</h1>");
+        return;
+      }
+
+      const gameHTML = await response.text();
+
+      const wrappedHTML = `
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Hypper Drive API Docs</title>
+<title>Loading...</title>
 <style>
-body { background:#0f0f0f; color:#fff; font-family:Arial; margin:0; }
-header { background:#1a1a1a; padding:20px; border-bottom:2px solid red; }
-section { padding:20px; border-bottom:1px solid #222; }
-h1,h2 { color:red; }
-code { background:#111; padding:6px 10px; display:block; margin:10px 0; }
-.endpoint { margin-bottom:15px; padding:10px; background:#161616; border-left:4px solid red; }
+html, body { margin:0; padding:0; height:100%; background:black; overflow:hidden; }
+#intro { position:fixed; inset:0; display:flex; justify-content:center; align-items:center; background:black; z-index:9999; }
+#intro img { width:100%; height:100%; object-fit:contain; }
+#gameContainer { display:none; height:100%; width:100%; }
 </style>
 </head>
 <body>
 
-<header>
-<h1>Hypper Drive API</h1>
-<p>Base URL: ${baseURL}</p>
-</header>
-
-<section>
-<h2>Endpoints</h2>
-
-<div class="endpoint">
-GET /
-<code>Returns API status.</code>
+<div id="intro">
+  <img src="${INTRO_GIF}">
 </div>
 
-<div class="endpoint">
-GET /docs
-<code>API documentation page.</code>
+<div id="gameContainer">
+${gameHTML}
 </div>
 
-<div class="endpoint">
-GET /api/games
-<code>Returns all games.</code>
-</div>
-
-<div class="endpoint">
-GET /api/games?search=name
-<code>Search games by name.</code>
-</div>
-
-<div class="endpoint">
-GET /api/recommendations
-<code>Returns recommendation banners.</code>
-</div>
-
-</section>
-
-<section>
-<h2>Games JSON Structure</h2>
-<code>
-[
-  {
-    "name": "Game Name",
-    "icon": "icon-url",
-    "banner": "banner-url",
-    "url": "game-html-url"
-  }
-]
-</code>
-</section>
-
-<section>
-<h2>Status</h2>
-<p>Operational</p>
-</section>
+<script>
+setTimeout(() => {
+  document.getElementById("intro").remove();
+  document.getElementById("gameContainer").style.display = "block";
+  document.title = "Game";
+}, 4000);
+</script>
 
 </body>
 </html>
 `;
-}
 
-/* ===============================
-   MAIN HANDLER
-================================ */
-export default async function handler(req, res) {
-  const baseURL = getBaseURL(req);
-  const url = new URL(req.url, baseURL);
-  const pathname = url.pathname;
-  const searchParams = url.searchParams;
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.status(200).send(wrappedHTML);
+      return;
+    }
 
-  /* ROOT */
-  if (pathname === "/") {
-    return res.status(200).json({
-      name: "Hypper Drive API",
-      status: "running",
-      docs: `${baseURL}/docs`,
-      endpoints: {
-        games: `${baseURL}/api/games`,
-        recommendations: `${baseURL}/api/recommendations`
+    // ================= BANNERS =================
+    if (path.startsWith("/api/banners/")) {
+
+      const file = path.replace("/api/banners/static/", "")
+                       .replace("/api/banners/animated/", "");
+
+      const response = await fetch(RECO_BASE + file);
+
+      if (!response.ok) {
+        res.status(404).json({ error: "Banner not found" });
+        return;
       }
+
+      const buffer = Buffer.from(await response.arrayBuffer());
+      res.setHeader("Content-Type", response.headers.get("content-type"));
+      res.status(200).send(buffer);
+      return;
+    }
+
+    // ================= FALLBACK =================
+    res.status(404).json({
+      error: "Route not found",
+      path
     });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
   }
-
-  /* DOCS */
-  if (pathname === "/docs") {
-    res.setHeader("Content-Type", "text/html");
-    return res.status(200).send(renderDocs(baseURL));
-  }
-
-  /* GAMES */
-  if (pathname === "/api/games") {
-    const data = await fetchJSON(GAMES_JSON_URL);
-
-    if (data.error) {
-      return res.status(500).json({
-        error: "Failed to load games.json",
-        debug: data
-      });
-    }
-
-    let games = data;
-
-    const search = searchParams.get("search");
-    if (search) {
-      games = games.filter(game =>
-        game.name?.toLowerCase().includes(search.toLowerCase())
-      );
-    }
-
-    return res.status(200).json(makeAbsolute(games, baseURL));
-  }
-
-  /* RECOMMENDATIONS */
-  if (pathname === "/api/recommendations") {
-    const data = await fetchJSON(RECO_JSON_URL);
-
-    if (data.error) {
-      return res.status(500).json({
-        error: "Failed to load reco.zone.json",
-        debug: data
-      });
-    }
-
-    return res.status(200).json(makeAbsolute(data, baseURL));
-  }
-
-  /* 404 */
-  return res.status(404).json({
-    error: "Route not found",
-    availableRoutes: [
-      `${baseURL}/`,
-      `${baseURL}/docs`,
-      `${baseURL}/api/games`,
-      `${baseURL}/api/recommendations`
-    ]
-  });
-}
+};
