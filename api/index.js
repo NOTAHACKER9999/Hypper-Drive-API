@@ -146,7 +146,7 @@ module.exports = async (req, res) => {
 
       const gameHTML = await response.text();
       const gifToUse = isStratus ? STRATUS_GIF : INTRO_GIF;
-      const introDuration = isStratus ? 3600 : 4000; // 3.6s vs 4s
+      const introDuration = isStratus ? 3700 : 4000; // 3.6s vs 4s
 
       const wrappedHTML = `
 <!DOCTYPE html>
