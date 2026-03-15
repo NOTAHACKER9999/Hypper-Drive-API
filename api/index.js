@@ -35,22 +35,27 @@ module.exports = async (req, res) => {
   const url = new URL(req.url, BASE_URL);
   const path = url.pathname;
 
+  // Detect if this is a Stratus route
+  const isStratus = path.startsWith("/Stratus/api");
+  // Normalize path so logic can reuse the same endpoints
+  const normalizedPath = isStratus ? path.replace("/Stratus", "") : path;
+
   try {
     // ================= ROOT =================
-    if (path === "/api" || path === "/api/") {
+    if (normalizedPath === "/api" || normalizedPath === "/api/") {
       return res.status(200).json({
         status: "running",
         version: "1.0.0",
-        documentation: `${BASE_URL}/api/docs`,
+        documentation: `${BASE_URL}${isStratus ? "/Stratus" : ""}/api/docs`,
         endpoints: [
-          `${BASE_URL}/api/games`,
-          `${BASE_URL}/api/recommendations`
+          `${BASE_URL}${isStratus ? "/Stratus" : ""}/api/games`,
+          `${BASE_URL}${isStratus ? "/Stratus" : ""}/api/recommendations`
         ]
       });
     }
 
     // ================= DOCS JSON =================
-    if (path === "/api/docs/json") {
+    if (normalizedPath === "/api/docs/json") {
       return res.status(200).json({
         name: "Hypper Drive Game API",
         version: "1.0.0",
@@ -67,14 +72,14 @@ module.exports = async (req, res) => {
     }
 
     // ================= DOCS PAGE =================
-    if (path === "/api/docs") {
-      const docsHTML = `...`; // same as original
+    if (normalizedPath === "/api/docs") {
+      const docsHTML = `...`; // reuse original HTML
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       return res.status(200).send(docsHTML);
     }
 
     // ================= GAMES =================
-    if (path === "/api/games") {
+    if (normalizedPath === "/api/games") {
       const response = await fetch(JSON_SOURCE);
       const original = await response.json();
       const search = url.searchParams.get("search");
@@ -97,8 +102,8 @@ module.exports = async (req, res) => {
         const htmlName = decodeURIComponent(g.url.split("/").pop());
         return {
           name: g.name,
-          cover: `${BASE_URL}/api/covers/${coverName}`,
-          url: `${BASE_URL}/api/html/${htmlName}`
+          cover: `${BASE_URL}${isStratus ? "/Stratus" : ""}/api/covers/${coverName}`,
+          url: `${BASE_URL}${isStratus ? "/Stratus" : ""}/api/html/${htmlName}`
         };
       });
 
@@ -106,7 +111,7 @@ module.exports = async (req, res) => {
     }
 
     // ================= RECOMMENDATIONS =================
-    if (path === "/api/recommendations") {
+    if (normalizedPath === "/api/recommendations") {
       const response = await fetch(RECO_SOURCE);
       const original = await response.json();
       const rewritten = original.map(i => {
@@ -115,17 +120,17 @@ module.exports = async (req, res) => {
         const htmlName = decodeURIComponent(i.url.split("/").pop());
         return {
           name: i.name,
-          banner_static: `${BASE_URL}/api/banners/static/${staticFile}`,
-          banner_animated: `${BASE_URL}/api/banners/animated/${animatedFile}`,
-          url: `${BASE_URL}/api/html/${htmlName}`
+          banner_static: `${BASE_URL}${isStratus ? "/Stratus" : ""}/api/banners/static/${staticFile}`,
+          banner_animated: `${BASE_URL}${isStratus ? "/Stratus" : ""}/api/banners/animated/${animatedFile}`,
+          url: `${BASE_URL}${isStratus ? "/Stratus" : ""}/api/html/${htmlName}`
         };
       });
       return res.status(200).json(rewritten);
     }
 
     // ================= COVERS =================
-    if (path.startsWith("/api/covers/")) {
-      const file = path.replace("/api/covers/", "");
+    if (normalizedPath.startsWith("/api/covers/")) {
+      const file = normalizedPath.replace("/api/covers/", "");
       const response = await fetch(ICON_BASE + file);
       if (!response.ok) return res.status(404).json({ error: "Cover not found" });
       const buffer = Buffer.from(await response.arrayBuffer());
@@ -134,16 +139,14 @@ module.exports = async (req, res) => {
     }
 
     // ================= HTML WITH INTRO =================
-    if (path.startsWith("/api/html/") || path.startsWith("/Stratus/api/html/")) {
-      const file = path.split("/").pop();
+    if (normalizedPath.startsWith("/api/html/")) {
+      const file = normalizedPath.replace("/api/html/", "");
       const response = await fetch(HTML_BASE + file);
       if (!response.ok) return res.status(404).send("<h1>Game not found</h1>");
 
       const gameHTML = await response.text();
-
-      // Use Stratus GIF if URL contains /Stratus/api/
-      const gifToUse = path.startsWith("/Stratus/api/") ? STRATUS_GIF : INTRO_GIF;
-      const introDuration = path.startsWith("/Stratus/api/") ? 3600 : 4000; // 3.6s vs 4s
+      const gifToUse = isStratus ? STRATUS_GIF : INTRO_GIF;
+      const introDuration = isStratus ? 3600 : 4000; // 3.6s vs 4s
 
       const wrappedHTML = `
 <!DOCTYPE html>
@@ -185,8 +188,8 @@ setTimeout(() => {
     }
 
     // ================= BANNERS =================
-    if (path.startsWith("/api/banners/")) {
-      const file = path.replace("/api/banners/static/", "").replace("/api/banners/animated/", "");
+    if (normalizedPath.startsWith("/api/banners/")) {
+      const file = normalizedPath.replace("/api/banners/static/", "").replace("/api/banners/animated/", "");
       const response = await fetch(RECO_BASE + file);
       if (!response.ok) return res.status(404).json({ error: "Banner not found" });
       const buffer = Buffer.from(await response.arrayBuffer());
