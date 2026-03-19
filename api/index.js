@@ -36,8 +36,8 @@ module.exports = async (req, res) => {
   const path = url.pathname;
 
   // Detect Stratus mode
-  const isStratus = path.startsWith("/stratus/api");
-  const normalizedPath = isStratus ? path.replace("/stratus", "") : path;
+  const isStratus = path.startsWith("/Stratus/api");
+  const normalizedPath = isStratus ? path.replace("/Stratus", "") : path;
   const prefix = isStratus ? "/Stratus" : "";
 
   try {
