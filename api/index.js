@@ -43,7 +43,7 @@ module.exports = async (req, res) => {
     if (normalizedPath === "/api" || normalizedPath === "/api/") {
       return res.status(200).json({
         status: "running",
-        version: "3.0.0",
+        version: "3.1.0",
         endpoints: [
           `${BASE_URL}${prefix}/api/games`,
           `${BASE_URL}${prefix}/api/games/new`,
@@ -140,19 +140,23 @@ module.exports = async (req, res) => {
       const file = normalizedPath.replace("/api/covers/", "");
       const response = await fetch(ICON_BASE + file);
 
-      if (!response.ok) return res.status(404).json({ error: "Cover not found" });
+      if (!response.ok) {
+        return res.status(404).json({ error: "Cover not found" });
+      }
 
       const buffer = Buffer.from(await response.arrayBuffer());
       res.setHeader("Content-Type", response.headers.get("content-type"));
       return res.status(200).send(buffer);
     }
 
-    // ================= HTML (INTRO ONLY, NO PROXYING INSIDE) =================
+    // ================= HTML WITH WORKING INTRO =================
     if (normalizedPath.startsWith("/api/html/")) {
       const file = normalizedPath.replace("/api/html/", "");
       const response = await fetch(HTML_BASE + file);
 
-      if (!response.ok) return res.status(404).send("<h1>Game not found</h1>");
+      if (!response.ok) {
+        return res.status(404).send("<h1>Game not found</h1>");
+      }
 
       const gameHTML = await response.text();
 
@@ -164,7 +168,10 @@ module.exports = async (req, res) => {
 (function(){
   const intro = document.createElement("div");
   intro.style.position = "fixed";
-  intro.style.inset = "0";
+  intro.style.top = "0";
+  intro.style.left = "0";
+  intro.style.width = "100vw";
+  intro.style.height = "100vh";
   intro.style.background = "black";
   intro.style.display = "flex";
   intro.style.justifyContent = "center";
@@ -179,8 +186,6 @@ module.exports = async (req, res) => {
 
   intro.appendChild(img);
 
-  document.documentElement.style.visibility = "hidden";
-
   document.addEventListener("DOMContentLoaded", () => {
     document.body.appendChild(intro);
   });
@@ -188,7 +193,6 @@ module.exports = async (req, res) => {
   window.addEventListener("load", () => {
     setTimeout(() => {
       intro.remove();
-      document.documentElement.style.visibility = "visible";
     }, ${introDuration});
   });
 })();
@@ -208,7 +212,9 @@ ${gameHTML}
 
       const response = await fetch(RECO_BASE + file);
 
-      if (!response.ok) return res.status(404).json({ error: "Banner not found" });
+      if (!response.ok) {
+        return res.status(404).json({ error: "Banner not found" });
+      }
 
       const buffer = Buffer.from(await response.arrayBuffer());
       res.setHeader("Content-Type", response.headers.get("content-type"));
