@@ -35,19 +35,21 @@ module.exports = async (req, res) => {
   const url = new URL(req.url, BASE_URL);
   const path = url.pathname;
 
+  // Detect Stratus mode
   const isStratus = path.startsWith("/Stratus/api");
   const normalizedPath = isStratus ? path.replace("/Stratus", "") : path;
+  const prefix = isStratus ? "/Stratus" : "";
 
   try {
     // ================= ROOT =================
     if (normalizedPath === "/api" || normalizedPath === "/api/") {
       return res.status(200).json({
         status: "running",
-        version: "1.0.0",
+        version: "2.0.0",
         endpoints: [
-          `${BASE_URL}${isStratus ? "/Stratus" : ""}/api/games`,
-          `${BASE_URL}${isStratus ? "/Stratus" : ""}/api/games/new`,
-          `${BASE_URL}${isStratus ? "/Stratus" : ""}/api/recommendations`
+          `${BASE_URL}${prefix}/api/games`,
+          `${BASE_URL}${prefix}/api/games/new`,
+          `${BASE_URL}${prefix}/api/recommendations`
         ]
       });
     }
@@ -63,8 +65,8 @@ module.exports = async (req, res) => {
 
         return {
           name: g.name,
-          cover: `${BASE_URL}${isStratus ? "/Stratus" : ""}/api/covers/${coverName}`,
-          url: `${BASE_URL}${isStratus ? "/Stratus" : ""}/api/html/${htmlName}`
+          cover: `${BASE_URL}${prefix}/api/covers/${coverName}`,
+          url: `${BASE_URL}${prefix}/api/html/${htmlName}`
         };
       });
 
@@ -76,7 +78,6 @@ module.exports = async (req, res) => {
       const response = await fetch(JSON_SOURCE);
       const original = await response.json();
 
-      // Get last 20 (newest)
       const latest = original.slice(-20).reverse();
 
       const rewritten = latest.map(g => {
@@ -85,8 +86,8 @@ module.exports = async (req, res) => {
 
         return {
           name: g.name,
-          cover: `${BASE_URL}${isStratus ? "/Stratus" : ""}/api/covers/${coverName}`,
-          url: `${BASE_URL}${isStratus ? "/Stratus" : ""}/api/html/${htmlName}`
+          cover: `${BASE_URL}${prefix}/api/covers/${coverName}`,
+          url: `${BASE_URL}${prefix}/api/html/${htmlName}`
         };
       });
 
@@ -105,9 +106,9 @@ module.exports = async (req, res) => {
 
         return {
           name: i.name,
-          banner_static: `${BASE_URL}${isStratus ? "/Stratus" : ""}/api/banners/static/${staticFile}`,
-          banner_animated: `${BASE_URL}${isStratus ? "/Stratus" : ""}/api/banners/animated/${animatedFile}`,
-          url: `${BASE_URL}${isStratus ? "/Stratus" : ""}/api/html/${htmlName}`
+          banner_static: `${BASE_URL}${prefix}/api/banners/static/${staticFile}`,
+          banner_animated: `${BASE_URL}${prefix}/api/banners/animated/${animatedFile}`,
+          url: `${BASE_URL}${prefix}/api/html/${htmlName}`
         };
       });
 
@@ -126,18 +127,57 @@ module.exports = async (req, res) => {
       return res.status(200).send(buffer);
     }
 
-    // ================= HTML (NO PROXY EFFECT ON CONTENT) =================
+    // ================= HTML WITH INTRO (SAFE SCRIPT INJECTION) =================
     if (normalizedPath.startsWith("/api/html/")) {
       const file = normalizedPath.replace("/api/html/", "");
       const response = await fetch(HTML_BASE + file);
 
       if (!response.ok) return res.status(404).send("<h1>Game not found</h1>");
 
-      // IMPORTANT: send raw HTML directly (no injection, no rewriting)
       const gameHTML = await response.text();
 
+      const gifToUse = isStratus ? STRATUS_GIF : INTRO_GIF;
+      const introDuration = isStratus ? 3700 : 4000;
+
+      const injectedHTML = `
+<script>
+(function(){
+  const intro = document.createElement("div");
+  intro.style.position = "fixed";
+  intro.style.inset = "0";
+  intro.style.background = "black";
+  intro.style.display = "flex";
+  intro.style.justifyContent = "center";
+  intro.style.alignItems = "center";
+  intro.style.zIndex = "999999";
+
+  const img = document.createElement("img");
+  img.src = "${gifToUse}";
+  img.style.width = "100%";
+  img.style.height = "100%";
+  img.style.objectFit = "contain";
+
+  intro.appendChild(img);
+
+  document.documentElement.style.visibility = "hidden";
+  document.addEventListener("DOMContentLoaded", () => {
+    document.body.appendChild(intro);
+    intro.style.visibility = "visible";
+  });
+
+  window.addEventListener("load", () => {
+    setTimeout(() => {
+      intro.remove();
+      document.documentElement.style.visibility = "visible";
+    }, ${introDuration});
+  });
+})();
+</script>
+${gameHTML}
+`;
+
       res.setHeader("Content-Type", "text/html; charset=utf-8");
-      return res.status(200).send(gameHTML);
+      return res.status(200).send(injectedHTML);
     }
 
     // ================= BANNERS =================
