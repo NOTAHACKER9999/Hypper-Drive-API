@@ -26,8 +26,7 @@ module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
   if (req.method === "OPTIONS") {
-    res.status(200).end();
-    return;
+    return res.status(200).end();
   }
 
   const protocol = req.headers["x-forwarded-proto"] || "https";
@@ -35,7 +34,6 @@ module.exports = async (req, res) => {
   const url = new URL(req.url, BASE_URL);
   const path = url.pathname;
 
-  // Detect Stratus mode
   const isStratus = path.startsWith("/Stratus/api");
   const normalizedPath = isStratus ? path.replace("/Stratus", "") : path;
   const prefix = isStratus ? "/Stratus" : "";
@@ -45,7 +43,7 @@ module.exports = async (req, res) => {
     if (normalizedPath === "/api" || normalizedPath === "/api/") {
       return res.status(200).json({
         status: "running",
-        version: "2.0.0",
+        version: "3.0.0",
         endpoints: [
           `${BASE_URL}${prefix}/api/games`,
           `${BASE_URL}${prefix}/api/games/new`,
@@ -59,21 +57,51 @@ module.exports = async (req, res) => {
       const response = await fetch(JSON_SOURCE);
       const original = await response.json();
 
-      const rewritten = original.map(g => {
+      const search = url.searchParams.get("search");
+      const limit = parseInt(url.searchParams.get("limit"));
+      const page = parseInt(url.searchParams.get("page")) || 1;
+      const sort = url.searchParams.get("sort");
+
+      let games = [...original];
+
+      if (search) {
+        games = games.filter(g =>
+          g.name.toLowerCase().includes(search.toLowerCase())
+        );
+      }
+
+      if (sort === "asc") {
+        games.sort((a, b) => a.name.localeCompare(b.name));
+      } else if (sort === "desc") {
+        games.sort((a, b) => b.name.localeCompare(a.name));
+      }
+
+      const perPage = limit && limit > 0 ? limit : games.length;
+      const start = (page - 1) * perPage;
+      const end = start + perPage;
+
+      const paginated = games.slice(start, end);
+
+      const rewritten = paginated.map(g => {
         const coverName = g.cover.split("/").pop();
         const htmlName = decodeURIComponent(g.url.split("/").pop());
 
         return {
-          name: g.name,
+          ...g,
           cover: `${BASE_URL}${prefix}/api/covers/${coverName}`,
           url: `${BASE_URL}${prefix}/api/html/${htmlName}`
         };
       });
 
-      return res.status(200).json(rewritten);
+      return res.status(200).json({
+        total: original.length,
+        returned: rewritten.length,
+        page,
+        data: rewritten
+      });
     }
 
-    // ================= NEWEST GAMES =================
+    // ================= NEWEST =================
     if (normalizedPath === "/api/games/new") {
       const response = await fetch(JSON_SOURCE);
       const original = await response.json();
@@ -85,13 +113,18 @@ module.exports = async (req, res) => {
         const htmlName = decodeURIComponent(g.url.split("/").pop());
 
         return {
-          name: g.name,
+          ...g,
           cover: `${BASE_URL}${prefix}/api/covers/${coverName}`,
           url: `${BASE_URL}${prefix}/api/html/${htmlName}`
         };
       });
 
-      return res.status(200).json(rewritten);
+      return res.status(200).json({
+        total: original.length,
+        returned: rewritten.length,
+        page: 1,
+        data: rewritten
+      });
     }
 
     // ================= RECOMMENDATIONS =================
@@ -99,20 +132,7 @@ module.exports = async (req, res) => {
       const response = await fetch(RECO_SOURCE);
       const original = await response.json();
 
-      const rewritten = original.map(i => {
-        const staticFile = i["banner-static"].split("/Recommendation/")[1];
-        const animatedFile = i["banner-vid"].split("/Recommendation/")[1];
-        const htmlName = decodeURIComponent(i.url.split("/").pop());
-
-        return {
-          name: i.name,
-          banner_static: `${BASE_URL}${prefix}/api/banners/static/${staticFile}`,
-          banner_animated: `${BASE_URL}${prefix}/api/banners/animated/${animatedFile}`,
-          url: `${BASE_URL}${prefix}/api/html/${htmlName}`
-        };
-      });
-
-      return res.status(200).json(rewritten);
+      return res.status(200).json(original);
     }
 
     // ================= COVERS =================
@@ -127,7 +147,7 @@ module.exports = async (req, res) => {
       return res.status(200).send(buffer);
     }
 
-    // ================= HTML WITH INTRO (SAFE SCRIPT INJECTION) =================
+    // ================= HTML (INTRO ONLY, NO PROXYING INSIDE) =================
     if (normalizedPath.startsWith("/api/html/")) {
       const file = normalizedPath.replace("/api/html/", "");
       const response = await fetch(HTML_BASE + file);
@@ -160,9 +180,9 @@ module.exports = async (req, res) => {
   intro.appendChild(img);
 
   document.documentElement.style.visibility = "hidden";
+
   document.addEventListener("DOMContentLoaded", () => {
     document.body.appendChild(intro);
-    intro.style.visibility = "visible";
   });
 
   window.addEventListener("load", () => {
