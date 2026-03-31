@@ -149,7 +149,7 @@ module.exports = async (req, res) => {
       return res.status(200).send(buffer);
     }
 
-    // ================= HTML WITH WORKING INTRO =================
+    // ================= HTML WITH CONDITIONAL INTRO =================
     if (normalizedPath.startsWith("/api/html/")) {
       const file = normalizedPath.replace("/api/html/", "");
       const response = await fetch(HTML_BASE + file);
@@ -159,6 +159,16 @@ module.exports = async (req, res) => {
       }
 
       const gameHTML = await response.text();
+
+      // 🔥 KEY CHANGE: disable intro if 43982 appears before /api/
+      const disableIntro =
+        path.includes("43982") &&
+        path.indexOf("43982") < path.indexOf("/api/");
+
+      if (disableIntro) {
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        return res.status(200).send(gameHTML);
+      }
 
       const gifToUse = isStratus ? STRATUS_GIF : INTRO_GIF;
       const introDuration = isStratus ? 3700 : 4000;
