@@ -32,14 +32,20 @@ module.exports = async (req, res) => {
   const protocol = req.headers["x-forwarded-proto"] || "https";
   const BASE_URL = `${protocol}://${req.headers.host}`;
   const url = new URL(req.url, BASE_URL);
-  const path = url.pathname;
 
+  // ================= PATH FIX =================
+  let path = url.pathname;
+
+  // 🔥 Detect + strip /43982
+  const noIntroMode = path.startsWith("/43982/");
+  if (noIntroMode) {
+    path = path.replace("/43982", "");
+  }
+
+  // ================= STRATUS =================
   const isStratus = path.startsWith("/Stratus/api");
   const normalizedPath = isStratus ? path.replace("/Stratus", "") : path;
   const prefix = isStratus ? "/Stratus" : "";
-
-  // 🔥 RELIABLE GLOBAL FLAG
-  const noIntroMode = req.url.includes("/43982/");
 
   try {
     // ================= ROOT =================
@@ -169,7 +175,7 @@ module.exports = async (req, res) => {
 
       const gameHTML = await response.text();
 
-      // 🚫 NO INTRO MODE
+      // 🚫 Disable intro in /43982 mode
       if (noIntroMode) {
         res.setHeader("Content-Type", "text/html; charset=utf-8");
         return res.status(200).send(gameHTML);
