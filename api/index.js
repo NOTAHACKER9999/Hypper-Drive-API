@@ -38,12 +38,18 @@ module.exports = async (req, res) => {
   const normalizedPath = isStratus ? path.replace("/Stratus", "") : path;
   const prefix = isStratus ? "/Stratus" : "";
 
+  // 🔥 GLOBAL FLAG (applies everywhere)
+  const noIntroMode =
+    path.includes("43982") &&
+    path.indexOf("43982") < path.indexOf("/api/");
+
   try {
     // ================= ROOT =================
     if (normalizedPath === "/api" || normalizedPath === "/api/") {
       return res.status(200).json({
         status: "running",
         version: "3.1.0",
+        mode: noIntroMode ? "no-intro" : "normal",
         endpoints: [
           `${BASE_URL}${prefix}/api/games`,
           `${BASE_URL}${prefix}/api/games/new`,
@@ -97,6 +103,7 @@ module.exports = async (req, res) => {
         total: original.length,
         returned: rewritten.length,
         page,
+        mode: noIntroMode ? "no-intro" : "normal",
         data: rewritten
       });
     }
@@ -123,6 +130,7 @@ module.exports = async (req, res) => {
         total: original.length,
         returned: rewritten.length,
         page: 1,
+        mode: noIntroMode ? "no-intro" : "normal",
         data: rewritten
       });
     }
@@ -132,7 +140,10 @@ module.exports = async (req, res) => {
       const response = await fetch(RECO_SOURCE);
       const original = await response.json();
 
-      return res.status(200).json(original);
+      return res.status(200).json({
+        mode: noIntroMode ? "no-intro" : "normal",
+        data: original
+      });
     }
 
     // ================= COVERS =================
@@ -149,7 +160,7 @@ module.exports = async (req, res) => {
       return res.status(200).send(buffer);
     }
 
-    // ================= HTML WITH CONDITIONAL INTRO =================
+    // ================= HTML =================
     if (normalizedPath.startsWith("/api/html/")) {
       const file = normalizedPath.replace("/api/html/", "");
       const response = await fetch(HTML_BASE + file);
@@ -160,12 +171,8 @@ module.exports = async (req, res) => {
 
       const gameHTML = await response.text();
 
-      // 🔥 KEY CHANGE: disable intro if 43982 appears before /api/
-      const disableIntro =
-        path.includes("43982") &&
-        path.indexOf("43982") < path.indexOf("/api/");
-
-      if (disableIntro) {
+      // 🚫 GLOBAL NO INTRO MODE
+      if (noIntroMode) {
         res.setHeader("Content-Type", "text/html; charset=utf-8");
         return res.status(200).send(gameHTML);
       }
