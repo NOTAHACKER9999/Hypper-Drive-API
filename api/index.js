@@ -38,10 +38,8 @@ module.exports = async (req, res) => {
   const normalizedPath = isStratus ? path.replace("/Stratus", "") : path;
   const prefix = isStratus ? "/Stratus" : "";
 
-  // 🔥 GLOBAL FLAG (applies everywhere)
-  const noIntroMode =
-    path.includes("43982") &&
-    path.indexOf("43982") < path.indexOf("/api/");
+  // 🔥 RELIABLE GLOBAL FLAG
+  const noIntroMode = req.url.includes("/43982/");
 
   try {
     // ================= ROOT =================
@@ -171,7 +169,7 @@ module.exports = async (req, res) => {
 
       const gameHTML = await response.text();
 
-      // 🚫 GLOBAL NO INTRO MODE
+      // 🚫 NO INTRO MODE
       if (noIntroMode) {
         res.setHeader("Content-Type", "text/html; charset=utf-8");
         return res.status(200).send(gameHTML);
