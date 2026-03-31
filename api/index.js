@@ -25,9 +25,7 @@ module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
+  if (req.method === "OPTIONS") return res.status(200).end();
 
   const protocol = req.headers["x-forwarded-proto"] || "https";
   const BASE_URL = `${protocol}://${req.headers.host}`;
@@ -36,11 +34,9 @@ module.exports = async (req, res) => {
   // ================= PATH FIX =================
   let path = url.pathname;
 
-  // 🔥 Detect + strip /43982
+  // 🔥 Detect + strip /43982, keep as mode
   const noIntroMode = path.startsWith("/43982/");
-  if (noIntroMode) {
-    path = path.replace("/43982", "");
-  }
+  if (noIntroMode) path = path.replace("/43982", "");
 
   // ================= STRATUS =================
   const isStratus = path.startsWith("/Stratus/api");
@@ -80,26 +76,25 @@ module.exports = async (req, res) => {
         );
       }
 
-      if (sort === "asc") {
-        games.sort((a, b) => a.name.localeCompare(b.name));
-      } else if (sort === "desc") {
-        games.sort((a, b) => b.name.localeCompare(a.name));
-      }
+      if (sort === "asc") games.sort((a, b) => a.name.localeCompare(b.name));
+      else if (sort === "desc") games.sort((a, b) => b.name.localeCompare(a.name));
 
       const perPage = limit && limit > 0 ? limit : games.length;
       const start = (page - 1) * perPage;
       const end = start + perPage;
-
       const paginated = games.slice(start, end);
 
       const rewritten = paginated.map(g => {
         const coverName = g.cover.split("/").pop();
         const htmlName = decodeURIComponent(g.url.split("/").pop());
 
+        // 🔥 inject 43982 into URLs if noIntroMode
+        const pathPrefix = noIntroMode ? "/43982" : "";
+
         return {
           ...g,
-          cover: `${BASE_URL}${prefix}/api/covers/${coverName}`,
-          url: `${BASE_URL}${prefix}/api/html/${htmlName}`
+          cover: `${BASE_URL}${pathPrefix}${prefix}/api/covers/${coverName}`,
+          url: `${BASE_URL}${pathPrefix}${prefix}/api/html/${htmlName}`
         };
       });
 
@@ -122,11 +117,12 @@ module.exports = async (req, res) => {
       const rewritten = latest.map(g => {
         const coverName = g.cover.split("/").pop();
         const htmlName = decodeURIComponent(g.url.split("/").pop());
+        const pathPrefix = noIntroMode ? "/43982" : "";
 
         return {
           ...g,
-          cover: `${BASE_URL}${prefix}/api/covers/${coverName}`,
-          url: `${BASE_URL}${prefix}/api/html/${htmlName}`
+          cover: `${BASE_URL}${pathPrefix}${prefix}/api/covers/${coverName}`,
+          url: `${BASE_URL}${pathPrefix}${prefix}/api/html/${htmlName}`
         };
       });
 
@@ -155,9 +151,7 @@ module.exports = async (req, res) => {
       const file = normalizedPath.replace("/api/covers/", "");
       const response = await fetch(ICON_BASE + file);
 
-      if (!response.ok) {
-        return res.status(404).json({ error: "Cover not found" });
-      }
+      if (!response.ok) return res.status(404).json({ error: "Cover not found" });
 
       const buffer = Buffer.from(await response.arrayBuffer());
       res.setHeader("Content-Type", response.headers.get("content-type"));
@@ -169,9 +163,7 @@ module.exports = async (req, res) => {
       const file = normalizedPath.replace("/api/html/", "");
       const response = await fetch(HTML_BASE + file);
 
-      if (!response.ok) {
-        return res.status(404).send("<h1>Game not found</h1>");
-      }
+      if (!response.ok) return res.status(404).send("<h1>Game not found</h1>");
 
       const gameHTML = await response.text();
 
@@ -233,9 +225,7 @@ ${gameHTML}
 
       const response = await fetch(RECO_BASE + file);
 
-      if (!response.ok) {
-        return res.status(404).json({ error: "Banner not found" });
-      }
+      if (!response.ok) return res.status(404).json({ error: "Banner not found" });
 
       const buffer = Buffer.from(await response.arrayBuffer());
       res.setHeader("Content-Type", response.headers.get("content-type"));
